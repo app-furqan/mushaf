@@ -1,0 +1,45 @@
+name: Purge jsDelivr Cache
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  purge-cache:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Purge jsDelivr cache for changed files
+        run: |
+          OWNER="${{ github.repository_owner }}"
+          REPO="${{ github.event.repository.name }}"
+          SHA="${{ github.sha }}"
+
+          # Collect changed/added files in this push
+          mapfile -t FILES < <(git diff --name-only HEAD~1 HEAD)
+
+          if [ ${#FILES[@]} -eq 0 ]; then
+            echo "No changed files detected."
+            exit 0
+          fi
+
+          for FILE in "${FILES[@]}"; do
+            # Purge the exact commit SHA reference
+            URL_SHA="https://purge.jsdelivr.net/gh/${OWNER}/${REPO}@${SHA}/${FILE}"
+            # Purge the @main floating tag so it points to the latest commit
+            URL_MAIN="https://purge.jsdelivr.net/gh/${OWNER}/${REPO}@main/${FILE}"
+
+            echo "Purging SHA  : $URL_SHA"
+            HTTP_SHA=$(curl -s -o /dev/null -w "%{http_code}" "$URL_SHA")
+            echo "  -> HTTP $HTTP_SHA"
+
+            echo "Purging @main: $URL_MAIN"
+            HTTP_MAIN=$(curl -s -o /dev/null -w "%{http_code}" "$URL_MAIN")
+            echo "  -> HTTP $HTTP_MAIN"
+          done
